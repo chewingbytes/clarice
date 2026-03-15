@@ -17,8 +17,27 @@ function resolveGooseCmd() {
   try {
     const stat = fs.statSync(cmd);
     if (stat.isDirectory()) {
-      const candidate = path.join(cmd, "goose");
-      cmd = candidate;
+      const preferred = ["goose", "goose-cli"];
+      for (const name of preferred) {
+        const candidate = path.join(cmd, name);
+        if (fs.existsSync(candidate)) {
+          cmd = candidate;
+          return cmd;
+        }
+      }
+
+      const entries = fs.readdirSync(cmd, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const candidate = path.join(cmd, entry.name);
+        try {
+          fs.accessSync(candidate, fs.constants.X_OK);
+          cmd = candidate;
+          return cmd;
+        } catch {
+          // keep searching
+        }
+      }
     }
   } catch {
     // ignore, spawn will surface the error
@@ -61,7 +80,7 @@ app.post("/run", (req, res) => {
   try {
     fs.accessSync(cmd, fs.constants.X_OK);
   } catch (err) {
-    writeSse(res, "error", `Goose not executable: ${err.message}`);
+    writeSse(res, "error", `Goose not executable at ${cmd}: ${err.message}`);
     return res.end();
   }
 
