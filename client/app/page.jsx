@@ -57,9 +57,16 @@ export default function Home() {
         data = data.trimEnd();
         if (!data) continue;
 
-        if (event === "stdout") addMessage(data, "bot");
-        else if (event === "stderr") addMessage(data, "stderr");
-        else if (event === "end") setStatus(`Finished (${data})`);
+          if (event === "stdout") addMessage(data, "bot");
+          else if (event === "stderr") addMessage(data, "stderr");
+          else if (event === "error") {
+            addMessage(data, "stderr");
+            setStatus("Error");
+          } else if (event === "start") {
+            setStatus("Running...");
+          } else if (event === "end") {
+            setStatus(`Finished (${data})`);
+          }
       }
     }
 

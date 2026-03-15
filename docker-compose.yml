@@ -9,7 +9,7 @@ services:
       - "3000:3000"
     environment:
       - PORT=3000
-      - GOOSE_CMD=goose
+      - GOOSE_CMD=/usr/local/bin/goose
       - GOOSE_CWD=/home
     volumes:
       - /home:/home
