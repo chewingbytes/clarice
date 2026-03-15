@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  goose-middleware:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - GOOSE_CMD=goose
+      - GOOSE_CWD=/home
+    volumes:
+      - /home:/home
+      - /usr/local/bin/goose:/usr/local/bin/goose:ro
+    restart: unless-stopped
