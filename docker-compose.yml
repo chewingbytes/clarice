@@ -9,9 +9,9 @@ services:
       - "3000:3000"
     environment:
       - PORT=3000
-      - GOOSE_CMD=/usr/local/bin/goose
+      - GOOSE_CMD=/root/.local/bin/goose
       - GOOSE_CWD=/home
     volumes:
       - /home:/home
-      - /usr/local/bin/goose:/usr/local/bin/goose:ro
+      - /root/.local/bin/goose:/root/.local/bin/goose:ro
     restart: unless-stopped

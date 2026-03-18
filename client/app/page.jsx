@@ -18,6 +18,8 @@ export default function Home() {
 
   const runGoose = async (instructions) => {
     setStatus("Running...");
+
+    console.log("INSTRUCTIONS:", instructions);
     addMessage(instructions, "user");
 
     const res = await fetch(`${apiBase}/run`, {
@@ -25,6 +27,8 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ instructions }),
     });
+
+    console.log("RESPONSE:", res);
 
     if (!res.ok || !res.body) {
       setStatus("Error");
@@ -40,11 +44,13 @@ export default function Home() {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+        console.log("RESPONSE OUTPUT:", buffer);
 
       let idx;
       while ((idx = buffer.indexOf("\n\n")) !== -1) {
         const chunk = buffer.slice(0, idx);
         buffer = buffer.slice(idx + 2);
+          console.log("RESPONSE CHUNK:", chunk);
 
         let event = "message";
         let data = "";
