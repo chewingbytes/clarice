@@ -9,7 +9,7 @@ export default function Home() {
 
   const apiBase = useMemo(
     () => process.env.NEXT_PUBLIC_API_BASE || "http://77.42.88.223:3000",
-    []
+    [],
   );
 
   const addMessage = (text, role) => {
@@ -44,13 +44,14 @@ export default function Home() {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-        console.log("RESPONSE OUTPUT:", buffer);
+      console.log("RESPONSE OUTPUT:", buffer);
 
       let idx;
       while ((idx = buffer.indexOf("\n\n")) !== -1) {
         const chunk = buffer.slice(0, idx);
         buffer = buffer.slice(idx + 2);
-          console.log("RESPONSE CHUNK:", chunk);
+
+        console.log("RESPONSE CHUNK:", chunk);
 
         let event = "message";
         let data = "";
@@ -63,16 +64,16 @@ export default function Home() {
         data = data.trimEnd();
         if (!data) continue;
 
-          if (event === "stdout") addMessage(data, "bot");
-          else if (event === "stderr") addMessage(data, "stderr");
-          else if (event === "error") {
-            addMessage(data, "stderr");
-            setStatus("Error");
-          } else if (event === "start") {
-            setStatus("Running...");
-          } else if (event === "end") {
-            setStatus(`Finished (${data})`);
-          }
+        if (event === "stdout") addMessage(data, "bot");
+        else if (event === "stderr") addMessage(data, "stderr");
+        else if (event === "error") {
+          addMessage(data, "stderr");
+          setStatus("Error");
+        } else if (event === "start") {
+          setStatus("Running...");
+        } else if (event === "end") {
+          setStatus(`Finished (${data})`);
+        }
       }
     }
 
@@ -95,7 +96,9 @@ export default function Home() {
       <header>Goose CLI Chat</header>
       <div className="messages">
         {messages.map((m, idx) => (
-          <div key={idx} className={`msg ${m.role}`}>{m.text}</div>
+          <div key={idx} className={`msg ${m.role}`}>
+            {m.text}
+          </div>
         ))}
       </div>
       <div className="status">{status}</div>
