@@ -2,16 +2,51 @@ version: "3.8"
 
 services:
   goose-middleware:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
+    image: bryan19191919191919/clarice:latest
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
       - GOOSE_CMD=/root/.local/bin/goose
       - GOOSE_CWD=/home
+      - GOOSE_CONFIG_DIR=/root/.config/goose
+      - HOME=/root
+      - XDG_CONFIG_HOME=/root/.config
+      - XDG_DATA_HOME=/root/.local/share
     volumes:
       - /home:/home
       - /root/.local/bin/goose:/root/.local/bin/goose:ro
+      - goose_config:/root/.config/goose
+      - goose_data:/root/.local/share/goose
     restart: unless-stopped
+
+  goose-telegram-bot:
+    image: bryan19191919191919/clarice:latest
+    command: ["node", "telegram-bot.js"]
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - API_BASE=http://goose-middleware:3000
+      - BOT_DATA_DIR=/data
+      - GOOSE_CMD=/root/.local/bin/goose
+      - GOOSE_CWD=/home
+      - GOOSE_CONFIG_DIR=/root/.config/goose
+      - HOME=/root
+      - XDG_CONFIG_HOME=/root/.config
+      - XDG_DATA_HOME=/root/.local/share
+    volumes:
+      - /home:/home
+      - /root/.local/bin/goose:/root/.local/bin/goose:ro
+      - goose_config:/root/.config/goose
+      - goose_data:/root/.local/share/goose
+      - bot_data:/data
+    depends_on:
+      - goose-middleware
+    restart: unless-stopped
+
+volumes:
+  goose_config:
+    name: goose_config
+  goose_data:
+    name: goose_data
+  bot_data:
+    name: bot_data

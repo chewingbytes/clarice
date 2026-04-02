@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Idle");
+  const [sessions, setSessions] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
 
   const apiBase = useMemo(
     () => process.env.NEXT_PUBLIC_API_BASE || "http://77.42.88.223:3000",
@@ -16,6 +18,21 @@ export default function Home() {
     setMessages((prev) => [...prev, { text, role }]);
   };
 
+  const loadSessions = async () => {
+    try {
+      const res = await fetch(`${apiBase}/sessions`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setSessions(data.sessions || []);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
   const runGoose = async (instructions) => {
     setStatus("Running...");
 
@@ -25,7 +42,7 @@ export default function Home() {
     const res = await fetch(`${apiBase}/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instructions }),
+      body: JSON.stringify({ instructions, sessionId }),
     });
 
     console.log("RESPONSE:", res);
@@ -66,7 +83,10 @@ export default function Home() {
 
         if (event === "stdout") addMessage(data, "bot");
         else if (event === "stderr") addMessage(data, "stderr");
-        else if (event === "error") {
+        else if (event === "session") {
+          setSessionId(data.trim());
+          loadSessions();
+        } else if (event === "error") {
           addMessage(data, "stderr");
           setStatus("Error");
         } else if (event === "start") {
@@ -78,6 +98,7 @@ export default function Home() {
     }
 
     setStatus("Idle");
+    loadSessions();
   };
 
   const onSubmit = (e) => {
@@ -91,26 +112,101 @@ export default function Home() {
     });
   };
 
+  const startNewSession = () => {
+    setMessages([]);
+    setStatus("Idle");
+    setSessionId(null);
+  };
+
+  const statusTone = status.startsWith("Running")
+    ? "running"
+    : status.startsWith("Error")
+      ? "error"
+      : status.startsWith("Finished")
+        ? "done"
+        : "idle";
+
   return (
     <div className="app">
-      <header>Goose CLI Chat</header>
-      <div className="messages">
-        {messages.map((m, idx) => (
-          <div key={idx} className={`msg ${m.role}`}>
-            {m.text}
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div className="brand">
+            <div className="brand-logo">G</div>
+            <div>
+              <div className="brand-title">Goose Studio</div>
+              <div className="brand-subtitle">Streaming CLI sessions</div>
+            </div>
           </div>
-        ))}
+
+          <div className="session-summary">
+            <div className="session-label">Current session</div>
+            <div className="session-value">
+              {sessionId || "New session (not yet created)"}
+            </div>
+            <div className="session-actions">
+              <button type="button" className="secondary" onClick={loadSessions}>
+                Refresh
+              </button>
+              <button type="button" className="secondary" onClick={startNewSession}>
+                New Session
+              </button>
+            </div>
+          </div>
+
+          <div className="session-list">
+            <div className="session-list-title">Recent sessions</div>
+            {sessions.length === 0 ? (
+              <div className="sessions-empty">No sessions found.</div>
+            ) : (
+              sessions.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`session-item ${s.id === sessionId ? "active" : ""}`}
+                  onClick={() => setSessionId(s.id)}
+                >
+                  <div className="session-name">{s.name}</div>
+                  <div className="session-meta">{s.id} • {s.createdAt}</div>
+                </button>
+              ))
+            )}
+          </div>
+        </aside>
+
+        <main className="chat">
+          <div className="chat-header">
+            <div>
+              <div className="chat-title">Conversation</div>
+              <div className="chat-subtitle">Live SSE stream from Goose</div>
+            </div>
+            <div className={`status-pill ${statusTone}`}>{status}</div>
+          </div>
+
+          <div className="messages">
+            {messages.length === 0 ? (
+              <div className="messages-empty">
+                Send a prompt to start the session.
+              </div>
+            ) : (
+              messages.map((m, idx) => (
+                <div key={idx} className={`msg ${m.role}`}>
+                  {m.text}
+                </div>
+              ))
+            )}
+          </div>
+
+          <form className="composer" onSubmit={onSubmit}>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Send instructions to Goose..."
+              required
+            />
+            <button type="submit">Send</button>
+          </form>
+        </main>
       </div>
-      <div className="status">{status}</div>
-      <form onSubmit={onSubmit}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Send instructions to Goose..."
-          required
-        />
-        <button type="submit">Send</button>
-      </form>
     </div>
   );
 }

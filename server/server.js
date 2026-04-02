@@ -70,13 +70,104 @@ function writeSse(res, event, data) {
   console.log(`[writeSse] Sent event: ${event}, data:`, data);
 }
 
+function listGooseSessions(limit = 20) {
+  return new Promise((resolve, reject) => {
+    const args = ["session", "list", "-l", String(limit)];
+    const child = spawn(resolveGooseCmd(), args, {
+      cwd: GOOSE_CWD,
+      env: process.env,
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+
+    child.on("close", (code) => {
+      if (code !== 0) {
+        return reject(new Error(stderr || `goose session list exited ${code}`));
+      }
+      const sessions = [];
+      for (const line of stdout.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        if (trimmed.toLowerCase().startsWith("available sessions")) continue;
+        const match = trimmed.match(/^([0-9]{8}_[0-9]+)\s+-\s+(.+?)\s+-\s+(.+)$/);
+        if (match) {
+          sessions.push({
+            id: match[1],
+            name: match[2],
+            createdAt: match[3],
+          });
+        }
+      }
+      resolve(sessions);
+    });
+
+    child.on("error", (err) => reject(err));
+  });
+}
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/sessions", async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const q = String(req.query.q || "").trim().toLowerCase();
+    const sessions = await listGooseSessions(limit);
+    const filtered = q
+      ? sessions.filter(
+          (s) => s.id.toLowerCase().includes(q) || s.name.toLowerCase().includes(q),
+        )
+      : sessions;
+    res.json({ sessions: filtered });
+  } catch (err) {
+    console.log("[GET /sessions] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/sessions/latest", async (_req, res) => {
+  try {
+    const sessions = await listGooseSessions(1);
+    res.json({ session: sessions[0] || null });
+  } catch (err) {
+    console.log("[GET /sessions/latest] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/sessions/:id", async (req, res) => {
+  try {
+    const sessionId = String(req.params.id);
+    const sessions = await listGooseSessions(200);
+    const session = sessions.find((s) => s.id === sessionId) || null;
+    if (!session) return res.status(404).json({ error: "session not found" });
+    res.json({ session });
+  } catch (err) {
+    console.log("[GET /sessions/:id] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/run", (req, res) => {
   const instructions = req.body?.instructions;
+  const sessionId = req.body?.sessionId;
   console.log("[POST /run] Received instructions:", instructions);
+  if (sessionId) {
+    console.log("[POST /run] Using sessionId:", sessionId);
+  }
   if (!instructions || typeof instructions !== "string") {
     console.log("[POST /run] Invalid instructions received.");
     return res.status(400).json({ error: "instructions is required" });
@@ -99,7 +190,12 @@ app.post("/run", (req, res) => {
     return res.end();
   }
 
-  const child = spawn(cmd, ["run", "--instructions", instructions], {
+  const args = ["run", "--text", instructions];
+  if (sessionId && typeof sessionId === "string") {
+    args.push("--resume", "--session-id", sessionId);
+  }
+
+  const child = spawn(cmd, args, {
     cwd: GOOSE_CWD,
     env: process.env,
   });
@@ -120,8 +216,19 @@ app.post("/run", (req, res) => {
     writeSse(res, "stderr", chunk.toString());
   });
 
-  child.on("close", (code, signal) => {
+  child.on("close", async (code, signal) => {
     console.log(`[child.close] Goose process exited with code: ${code}, signal: ${signal}`);
+    if (!sessionId) {
+      try {
+        const sessions = await listGooseSessions(1);
+        if (sessions[0]?.id) {
+          writeSse(res, "session", sessions[0].id);
+        }
+      } catch (err) {
+        console.log("[child.close] Failed to fetch latest session:", err.message);
+      }
+    }
+
     if (signal) {
       writeSse(res, "end", `signal ${signal}`);
     } else {
